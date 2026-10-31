@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Scapegoat Party Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for animations and preventing text selection during play */
+        body {
+            -webkit-user-select: none;
+            user-select: none;
+            touch-action: pan-x pan-y; /* Prevent touch delays on mobile */
+        }
+        /* Screen Layout and Transitions */
+        .screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            flex-direction: column;
+        }
+        .screen.active { display: flex; }
+        
+        .slide-in {
+            animation: slideIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+        .slide-out {
+            animation: slideOut 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(50px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes slideOut {
+            from { opacity: 1; transform: translateX(0); }
+            to { opacity: 0; transform: translateX(-50px); }
+        }
+    </style>
+</head>
+<body class="bg-black text-green-500 font-mono antialiased h-screen w-screen overflow-hidden">
+
+    <div class="w-full max-w-md mx-auto h-full flex flex-col relative border-x border-green-900 shadow-[0_0_30px_rgba(20,83,45,0.3)] bg-gray-950 overflow-hidden">
+
+        <!-- Setup Screen -->
+        <div id="setup-screen" class="screen active p-6 overflow-y-auto bg-gray-950 z-10">
+            <h1 class="text-3xl font-bold text-center mb-6 text-green-400 drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]">🐐 SCAPEGOAT 🐐<br><span class="text-lg text-green-700">TERMINAL_SECURE</span></h1>
+            
+            <div class="mb-4">
+                <label class="block text-green-600 mb-2 font-bold tracking-widest uppercase text-sm">Operative Roster (one per line)</label>
+                <textarea id="player-list" class="w-full bg-black border border-green-800 rounded p-4 h-64 text-lg focus:outline-none focus:border-green-400 focus:shadow-[0_0_10px_rgba(74,222,128,0.3)] resize-none text-green-300" placeholder="AlphaGoat&#10;BillyTheKid&#10;HoofMaster&#10;Bleater"></textarea>
+            </div>
+
+            <div id="error-msg" class="text-red-400 text-center mb-4 hidden font-medium bg-red-950/50 p-3 rounded border border-red-800 shadow-[0_0_10px_rgba(220,38,38,0.5)]"></div>
+
+            <div class="mt-auto pt-4">
+                <button id="btn-start" class="w-full bg-green-900 hover:bg-green-700 active:bg-green-800 text-green-100 border border-green-500 rounded py-4 px-6 text-xl font-bold transition shadow-[0_0_15px_rgba(34,197,94,0.4)] uppercase tracking-widest active:scale-[0.98]">
+                    Start Operation
+                </button>
+            </div>
+        </div>
+
+        <!-- Interstitial Screen (Pass to Player) -->
+        <div id="interstitial-screen" class="screen p-6 justify-between text-center bg-gray-950 z-10">
+            <div class="flex-1 flex flex-col justify-center items-center">
+                <p class="text-green-700 text-xl mb-4 font-bold tracking-widest uppercase">Secure Comms Link:</p>
+                <h2 id="pass-to-name" class="text-5xl font-extrabold text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)] break-words w-full px-2"></h2>
+            </div>
+            
+            <div class="pb-8 w-full">
+                <button id="btn-reveal" class="relative overflow-hidden w-full bg-yellow-900 text-yellow-100 border border-yellow-500 rounded py-5 px-6 text-2xl font-bold shadow-[0_0_15px_rgba(234,179,8,0.4)] uppercase tracking-widest cursor-pointer select-none">
+                    <div id="reveal-fill" class="absolute top-0 left-0 h-full bg-yellow-600 w-0 z-0"></div>
+                    <span class="relative z-10 drop-shadow-md">Hold to Decrypt</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Reveal Screen (Identical layout constraint) -->
+        <div id="reveal-screen" class="screen p-6 justify-between text-center bg-black z-10">
+            <div class="flex-1 flex flex-col justify-center items-center">
+                <p class="text-green-700 text-xl mb-4 font-bold tracking-widest uppercase">Your Target Is:</p>
+                <h2 id="assigned-name" class="text-5xl font-extrabold text-yellow-400 drop-shadow-[0_0_10px_rgba(250,204,21,0.8)] break-words w-full px-2"></h2>
+            </div>
+            
+            <div class="pb-8 w-full">
+                <button id="btn-hide" class="relative overflow-hidden w-full bg-red-900 text-red-100 border border-red-500 rounded py-5 px-6 text-2xl font-bold shadow-[0_0_15px_rgba(220,38,38,0.4)] uppercase tracking-widest cursor-pointer select-none">
+                    <div id="hide-fill" class="absolute top-0 left-0 h-full bg-red-600 w-0 z-0"></div>
+                    <span class="relative z-10 drop-shadow-md">Hold to Wipe</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- End Screen -->
+        <div id="end-screen" class="screen p-6 justify-center items-center text-center bg-gray-950 z-10">
+            <h2 class="text-3xl font-bold text-green-400 mb-4 drop-shadow-[0_0_8px_rgba(74,222,128,0.8)]">ROSTER BRIEFED</h2>
+            <p class="text-green-600 text-lg mb-12 uppercase tracking-wider">Commence the Heist.</p>
+            
+            <button id="btn-restart" class="w-full bg-gray-900 hover:bg-gray-800 active:bg-gray-700 text-green-500 border border-green-900 rounded py-4 px-6 text-xl font-bold transition uppercase tracking-widest active:scale-[0.98]">
+                Abort & Restart
+            </button>
+        </div>
+    </div>
+
+<script>
+    // State variables
+    let players = [];
+        let playerA = "";
+        let playerB = "";
+        let currentIndex = 0;
+
+        // DOM Elements
+        const screens = {
+            setup: document.getElementById('setup-screen'),
+            interstitial: document.getElementById('interstitial-screen'),
+            reveal: document.getElementById('reveal-screen'),
+            end: document.getElementById('end-screen')
+        };
+
+        const elements = {
+        playerList: document.getElementById('player-list'),
+        errorMsg: document.getElementById('error-msg'),
+        passToName: document.getElementById('pass-to-name'),
+        assignedName: document.getElementById('assigned-name')
+    };
+
+    // Screen Navigation
+    let isAnimating = false;
+
+    function showScreen(screenName) {
+        if (isAnimating) return;
+        
+        const activeScreen = Object.values(screens).find(s => s.classList.contains('active'));
+        const nextScreen = screens[screenName];
+
+        if (activeScreen && activeScreen !== nextScreen) {
+            isAnimating = true;
+            activeScreen.classList.remove('slide-in');
+            activeScreen.classList.add('slide-out');
+            
+            setTimeout(() => {
+                activeScreen.classList.remove('active', 'slide-out');
+                nextScreen.classList.add('active', 'slide-in');
+                isAnimating = false;
+            }, 400); // Wait for slide-out animation to finish
+        } else {
+            Object.values(screens).forEach(s => {
+                s.classList.remove('active', 'slide-in', 'slide-out');
+            });
+            nextScreen.classList.add('active', 'slide-in');
+        }
+    }
+
+    function showError(msg) {
+            elements.errorMsg.textContent = msg;
+            elements.errorMsg.classList.remove('hidden');
+            setTimeout(() => {
+                elements.errorMsg.classList.add('hidden');
+            }, 4000);
+        }
+
+        // Logic Functions
+        function getParsedPlayers() {
+            const rawText = elements.playerList.value;
+            // Filter out empty lines and trim whitespace
+            return rawText.split('\n').map(p => p.trim()).filter(p => p.length > 0);
+        }
+
+        function startGame() {
+            players = getParsedPlayers();
+
+            // Validations
+            if (players.length < 2) {
+                showError("Please enter at least 2 players in the list.");
+                return;
+            }
+
+            // Ensure unique names to avoid logic conflicts
+            const uniquePlayers = new Set(players);
+            if (uniquePlayers.size !== players.length) {
+                showError("Please ensure all player names are unique.");
+                return;
+            }
+
+            // Randomly select Player A and Player B
+            // We use indices to guarantee we pick two distinct people
+            let indices = Array.from({ length: players.length }, (_, i) => i);
+            
+            // Fisher-Yates Shuffle for indices
+            for (let i = indices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [indices[i], indices[j]] = [indices[j], indices[i]];
+            }
+
+            playerA = players[indices[0]];
+            playerB = players[indices[1]];
+
+            // Start game
+            currentIndex = 0;
+            prepareInterstitial();
+        }
+
+        function prepareInterstitial() {
+            if (currentIndex >= players.length) {
+                showScreen('end');
+                return;
+            }
+            
+            const currentPlayer = players[currentIndex];
+            elements.passToName.textContent = currentPlayer;
+            showScreen('interstitial');
+        }
+
+        function showReveal() {
+            const currentPlayer = players[currentIndex];
+            
+            // Core Game Logic
+            let assigned = "";
+            if (currentPlayer === playerA) {
+                assigned = playerB;
+            } else {
+                assigned = playerA;
+            }
+
+            elements.assignedName.textContent = assigned;
+            showScreen('reveal');
+        }
+
+        function hideAndNext() {
+        currentIndex++;
+        prepareInterstitial();
+    }
+
+    // Event Listeners
+    document.getElementById('btn-start').addEventListener('click', startGame);
+    
+    // Long-Press Mechanic
+    function setupHoldButton(btnId, fillId, actionCallback) {
+        const btn = document.getElementById(btnId);
+        const fill = document.getElementById(fillId);
+        let holdTimeout;
+        let isHolding = false;
+
+        const startHold = (e) => {
+            if(e.cancelable) e.preventDefault(); // Prevent text selection or long-press context menus on mobile
+            if (isHolding) return;
+            isHolding = true;
+
+            fill.style.transition = 'width 1s linear';
+            fill.style.width = '100%';
+
+            holdTimeout = setTimeout(() => {
+                if (isHolding) {
+                    actionCallback();
+                    resetHold();
+                }
+            }, 1000);
+        };
+
+        const resetHold = () => {
+            isHolding = false;
+            clearTimeout(holdTimeout);
+            fill.style.transition = 'width 0.2s ease-out';
+            fill.style.width = '0%';
+        };
+
+        btn.addEventListener('mousedown', startHold);
+        btn.addEventListener('touchstart', startHold, { passive: false });
+        
+        btn.addEventListener('mouseup', resetHold);
+        btn.addEventListener('mouseleave', resetHold);
+        btn.addEventListener('touchend', resetHold);
+        btn.addEventListener('touchcancel', resetHold);
+    }
+
+    setupHoldButton('btn-reveal', 'reveal-fill', showReveal);
+    setupHoldButton('btn-hide', 'hide-fill', hideAndNext);
+    
+    document.getElementById('btn-restart').addEventListener('click', () => {
+        showScreen('setup');
+        elements.errorMsg.classList.add('hidden');
+    });
+
+</script>
+</body>
+</html>
